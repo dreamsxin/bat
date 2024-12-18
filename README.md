@@ -153,6 +153,17 @@ There are a few different request item types that provide a convenient mechanism
 
 They are key/value pairs specified after the URL. All have in common that they become part of the actual request that is sent and that their type is distinguished only by the separator used: `:`, `=`, `:=`, `@`, `=@`, and `:=@`. The ones with an `@` expect a file path as value.
 
+请求数据默认都将被序列化为 JSON 对象（默认），或可以指定进行表单编码（--form，-f）。
+请求数据作为键值对跟在 URL 之后。通过键值之间的分隔符来区分数据类型（HTTP 头、请求数据）：
+- `:`
+设置HTTP 头
+- `=`
+设置请求数据
+- `:=`
+设置请求数据，内容为 JSON 类型
+- `@`、`=@`和`:=@`
+文件路径作为值。
+
 
 |       Item Type         |	          Description           |
 | ------------------------| ------------------------------ | 
