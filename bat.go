@@ -23,7 +23,6 @@ import (
 	"flag"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"log"
 	"net/http"
 	"net/url"
@@ -104,7 +103,6 @@ func parsePrintOption(s string) {
 	if strings.ContainsRune(s, 'b') {
 		printOption |= printRespBody
 	}
-	return
 }
 
 func main() {
@@ -130,7 +128,7 @@ func main() {
 			panic(err)
 		}
 		if fi.Size() != 0 {
-			stdin, err = ioutil.ReadAll(os.Stdin)
+			stdin, err = io.ReadAll(os.Stdin)
 			if err != nil {
 				log.Fatal("Read from Stdin", err)
 			}
@@ -224,7 +222,7 @@ func main() {
 				f = strings.TrimSpace(f)
 				if strings.HasPrefix(f, "filename=") {
 					// Remove 'filename='
-					f = strings.TrimLeft(f, "filename=")
+					f = strings.TrimPrefix(f, "filename=")
 
 					// Remove quotes and spaces from either end
 					f = strings.TrimLeft(f, "\"' ")
@@ -389,7 +387,7 @@ Example:
 
 	bat beego.me
 
-more help information please refer to https://github.com/astaxie/bat
+more help information please refer to https://github.com/dreamsxin/bat
 `
 
 func usage() {

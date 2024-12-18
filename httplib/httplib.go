@@ -15,30 +15,30 @@
 
 // Usage:
 //
-// import "github.com/astaxie/beego/httplib"
+// import "github.com/dreamsxin/beego/httplib"
 //
-//	b := httplib.Post("http://beego.me/")
-//	b.Param("username","astaxie")
-//	b.Param("password","123456")
-//	b.PostFile("uploadfile1", "httplib.pdf")
-//	b.PostFile("uploadfile2", "httplib.txt")
-//	str, err := b.String()
-//	if err != nil {
-//		t.Fatal(err)
-//	}
-//	fmt.Println(str)
+//		b := httplib.Post("http://beego.me/")
+//		b.Param("username","astaxie")
+//		b.Param("password","123456")
+//		b.PostFile("uploadfile1", "httplib.pdf")
+//		b.PostFile("uploadfile2", "httplib.txt")
+//		str, err := b.String()
+//		if err != nil {
+//			t.Fatal(err)
+//		}
+//		fmt.Println(str)
 //
-//  more docs http://beego.me/docs/module/httplib.md
+//	 more docs http://beego.me/docs/module/httplib.md
 package httplib
 
 import (
 	"bytes"
 	"compress/gzip"
+	"context"
 	"crypto/tls"
 	"encoding/json"
 	"encoding/xml"
 	"io"
-	"io/ioutil"
 	"log"
 	"mime/multipart"
 	"net"
@@ -249,9 +249,9 @@ func (b *BeegoHttpRequest) SetTransport(transport http.RoundTripper) *BeegoHttpR
 // example:
 //
 //	func(req *http.Request) (*url.URL, error) {
-// 		u, _ := url.ParseRequestURI("http://127.0.0.1:8118")
-// 		return u, nil
-// 	}
+//		u, _ := url.ParseRequestURI("http://127.0.0.1:8118")
+//		return u, nil
+//	}
 func (b *BeegoHttpRequest) SetProxy(proxy func(*http.Request) (*url.URL, error)) *BeegoHttpRequest {
 	b.setting.Proxy = proxy
 	return b
@@ -275,11 +275,11 @@ func (b *BeegoHttpRequest) Body(data interface{}) *BeegoHttpRequest {
 	switch t := data.(type) {
 	case string:
 		bf := bytes.NewBufferString(t)
-		b.req.Body = ioutil.NopCloser(bf)
+		b.req.Body = io.NopCloser(bf)
 		b.req.ContentLength = int64(len(t))
 	case []byte:
 		bf := bytes.NewBuffer(t)
-		b.req.Body = ioutil.NopCloser(bf)
+		b.req.Body = io.NopCloser(bf)
 		b.req.ContentLength = int64(len(t))
 	}
 	return b
@@ -293,7 +293,7 @@ func (b *BeegoHttpRequest) JsonBody(obj interface{}) (*BeegoHttpRequest, error) 
 		if err := enc.Encode(obj); err != nil {
 			return b, err
 		}
-		b.req.Body = ioutil.NopCloser(buf)
+		b.req.Body = io.NopCloser(buf)
 		b.req.ContentLength = int64(buf.Len())
 		b.req.Header.Set("Content-Type", "application/json")
 	}
@@ -303,7 +303,7 @@ func (b *BeegoHttpRequest) JsonBody(obj interface{}) (*BeegoHttpRequest, error) 
 func (b *BeegoHttpRequest) buildUrl(paramBody string) {
 	// build GET url with query string
 	if b.req.Method == "GET" && len(paramBody) > 0 {
-		if strings.Index(b.url, "?") != -1 {
+		if strings.Contains(b.url, "?") {
 			b.url += "&" + paramBody
 		} else {
 			b.url = b.url + "?" + paramBody
@@ -341,7 +341,7 @@ func (b *BeegoHttpRequest) buildUrl(paramBody string) {
 				pw.Close()
 			}()
 			b.Header("Content-Type", bodyWriter.FormDataContentType())
-			b.req.Body = ioutil.NopCloser(pr)
+			b.req.Body = io.NopCloser(pr)
 			return
 		}
 
@@ -392,22 +392,21 @@ func (b *BeegoHttpRequest) SendOut() (*http.Response, error) {
 	if trans == nil {
 		// create default transport
 		trans = &http.Transport{
-			TLSClientConfig: b.setting.TlsClientConfig,
-			Proxy:           b.setting.Proxy,
-			Dial:            TimeoutDialer(b.setting.ConnectTimeout, b.setting.ReadWriteTimeout),
+			TLSClientConfig:     b.setting.TlsClientConfig,
+			Proxy:               b.setting.Proxy,
+			DialContext:         TimeoutDialerCtx(b.setting.ConnectTimeout, b.setting.ReadWriteTimeout),
+			MaxIdleConnsPerHost: 100,
 		}
-	} else {
+	} else if t, ok := trans.(*http.Transport); ok {
 		// if b.transport is *http.Transport then set the settings.
-		if t, ok := trans.(*http.Transport); ok {
-			if t.TLSClientConfig == nil {
-				t.TLSClientConfig = b.setting.TlsClientConfig
-			}
-			if t.Proxy == nil {
-				t.Proxy = b.setting.Proxy
-			}
-			if t.Dial == nil {
-				t.Dial = TimeoutDialer(b.setting.ConnectTimeout, b.setting.ReadWriteTimeout)
-			}
+		if t.TLSClientConfig == nil {
+			t.TLSClientConfig = b.setting.TlsClientConfig
+		}
+		if t.Proxy == nil {
+			t.Proxy = b.setting.Proxy
+		}
+		if t.DialContext == nil {
+			t.DialContext = TimeoutDialerCtx(b.setting.ConnectTimeout, b.setting.ReadWriteTimeout)
 		}
 	}
 
@@ -464,13 +463,14 @@ func (b *BeegoHttpRequest) Bytes() ([]byte, error) {
 	}
 	defer resp.Body.Close()
 	if b.setting.Gzip && resp.Header.Get("Content-Encoding") == "gzip" {
-		reader, err := gzip.NewReader(resp.Body)
+		var reader *gzip.Reader
+		reader, err = gzip.NewReader(resp.Body)
 		if err != nil {
 			return nil, err
 		}
-		b.body, err = ioutil.ReadAll(reader)
+		b.body, err = io.ReadAll(reader)
 	} else {
-		b.body, err = ioutil.ReadAll(resp.Body)
+		b.body, err = io.ReadAll(resp.Body)
 	}
 	if err != nil {
 		return nil, err
@@ -524,14 +524,13 @@ func (b *BeegoHttpRequest) Response() (*http.Response, error) {
 	return b.getResponse()
 }
 
-// TimeoutDialer returns functions of connection dialer with timeout settings for http.Transport Dial field.
-func TimeoutDialer(cTimeout time.Duration, rwTimeout time.Duration) func(net, addr string) (c net.Conn, err error) {
-	return func(netw, addr string) (net.Conn, error) {
+func TimeoutDialerCtx(cTimeout time.Duration, rwTimeout time.Duration) func(ctx context.Context, net, addr string) (c net.Conn, err error) {
+	return func(ctx context.Context, netw, addr string) (net.Conn, error) {
 		conn, err := net.DialTimeout(netw, addr, cTimeout)
 		if err != nil {
 			return nil, err
 		}
-		conn.SetDeadline(time.Now().Add(rwTimeout))
-		return conn, nil
+		err = conn.SetDeadline(time.Now().Add(rwTimeout))
+		return conn, err
 	}
 }

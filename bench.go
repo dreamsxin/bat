@@ -8,7 +8,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/astaxie/bat/httplib"
+	"github.com/dreamsxin/bat/httplib"
 )
 
 type result struct {
@@ -37,12 +37,12 @@ func RunBench(b *httplib.BeegoHttpRequest) {
 	close(jobs)
 
 	wg.Wait()
-	printReport(benchN, results, "", time.Now().Sub(start))
+	printReport(benchN, results, "", time.Since(start))
 	close(results)
 }
 
 func worker(wg *sync.WaitGroup, ch chan int, results chan *result, b *httplib.BeegoHttpRequest) {
-	for _ = range ch {
+	for range ch {
 		s := time.Now()
 		code := 0
 		size := int64(0)
@@ -56,7 +56,7 @@ func worker(wg *sync.WaitGroup, ch chan int, results chan *result, b *httplib.Be
 
 		results <- &result{
 			statusCode:    code,
-			duration:      time.Now().Sub(s),
+			duration:      time.Since(s),
 			err:           err,
 			contentLength: size,
 		}
@@ -68,6 +68,7 @@ const (
 )
 
 type report struct {
+	size     int
 	avgTotal float64
 	fastest  float64
 	slowest  float64
@@ -87,6 +88,7 @@ type report struct {
 
 func printReport(size int, results chan *result, output string, total time.Duration) {
 	r := &report{
+		size:           size,
 		output:         output,
 		results:        results,
 		total:          total,
